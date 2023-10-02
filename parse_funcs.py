@@ -1,156 +1,99 @@
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
+import re
 
 
-def _wait_get_elem(driver_, xpath_, timeout_):
-    return WebDriverWait(driver_, timeout_).until(
-        EC.presence_of_element_located((By.XPATH, xpath_))
-    )
-
-
-def _get_elem_attributes(driver_, wait_for_load_, url_xpath_, status_xpath_=None, timeout_=10):
-    if wait_for_load_:
-        url_elem = _wait_get_elem(driver_, url_xpath_, timeout_)
-    else:
-        url_elem = driver_.find_element(By.XPATH, url_xpath_)
-    url_ = url_elem.get_attribute('href')
-
-    if status_xpath_:
-        try:
-            status_ = driver_.find_element(By.XPATH, status_xpath_).get_attribute('innerText')
-        except NoSuchElementException:
-            status_ = 'Available'
-    else:
-        status_ = None
-    return url_, status_
-
-
-def mvgm_parse(web_driver):
+def parse_mvgm(soup):
     urls = []
-    xpath_root = "//ul[@id='search-results']/li[{}]/div[1]/div"
-    last_page = False
-    wait_for_load = True
-    i = 1
-    while True:
-        try:
-            url, status = _get_elem_attributes(
-                driver_=web_driver, wait_for_load_=wait_for_load,
-                url_xpath_=f'{xpath_root.format(i)}/a',
-                status_xpath_=f'{xpath_root.format(i)}/figure/span'
-            )
-            wait_for_load = False
-        except NoSuchElementException:
-            break
-
-        if status not in ('Available', 'Nieuw'):
+    for offer in soup.find_all(
+        class_='card card-woning shadow-sm rounded-5 rounded-end-0 rounded-bottom-0 overflow-hidden flex-grow-1'
+    ):
+        status = offer.find(class_=re.compile("status-dot bg-status")).next_sibling.strip()
+        if status != 'Te huur':
             last_page = True
             break
 
-        urls.append(url)
-        i += 1
+        href = offer.find(class_='stretched-link')['href']
+        if href.startswith('https://wonenbijbouwinvest'):
+            continue
+
+        city_elem = offer.find(class_='card-body d-flex flex-column').find('span')
+        city = ' '.join(city_elem.text.split()[1:]) if city_elem else 'Unknown'
+        
+        urls.append((f'https://ikwilhuren.nu{href}', city))
+    else:
+        last_page = not len(urls)
     return urls, last_page
 
 
-def vesteda_parse(web_driver):
+def parse_vesteda(soup):
     urls = []
-    xpath = "//ul[@class='o-layout u-margin-bottom-none' and @data-cy='unit-search-results-list']/li[{}]/div/a"
-    wait_for_load = True
-    i = 1
-    while True:
-        try:
-            url, status = _get_elem_attributes(
-                driver_=web_driver, wait_for_load_=wait_for_load,
-                url_xpath_=xpath.format(i),
-                status_xpath_=f'{xpath.format(i)}/article/div[1]/span'
-            )
-            wait_for_load = False
-        except NoSuchElementException:
+    for offer in soup.find_all(class_='o-card--listview-container'):
+        status = offer.find(class_=re.compile('c-object-label c-object-label'))
+        if status:
             break
 
-        if status.startswith('Re'):  # Reserved, Rented, Rented with reservation
-            break
+        href = offer.next_element['href']
+        city_elem = offer.find(class_='u-heading u-margin-bottom-none')
+        city = city_elem.text.strip() if city_elem else 'Unknown'
 
-        urls.append(url)
-        i += 1
+        urls.append((f'https://www.vesteda.com{href}', city))
     return urls, True
 
 
-def rebo_parse(web_driver):
+def parse_rebo(soup):
     urls = []
-    xpath = "//div[@class='row js-object-items']/div/div[{}]/div/a"
-    wait_for_load = True
-    for i in range(1, 51):  # Should be more than enough
-        try:
-            url, _ = _get_elem_attributes(
-                driver_=web_driver, wait_for_load_=wait_for_load,
-                url_xpath_=xpath.format(i)
-            )
-            wait_for_load = False
-        except NoSuchElementException:
+    for offer in soup.find_all(class_='property js-object-item'):
+        label_elem = offer.find(class_='label')
+        label = label_elem.text.lower() if label_elem else ''
+        if label == 'garage':
+            continue
+        if label == 'complex':
             break
-        urls.append(url)
+
+        href = offer.find('a').attrs.get('href')
+        if href:
+            try:
+                city = offer.find(class_='text').find('h4').text
+            except Exception:  # too generic...
+                city = 'Unknown'
+            urls.append((f'https://www.rebohuurwoning.nl{href}', city))
     return urls, True
 
 
-def bouwinvest_parse(web_driver):
+# With status checking: doesn't work correctly without Selenium. Dynamically ipdates statuses
+# ===========
+# def parse_bouwinvest(soup):
+#     urls = []
+#     offers = soup.find_all(class_='projectproperty-tile box-shadow')
+#     for offer in offers:
+#         status = soup.find(class_='sticker-bar sticker-bar__top').next_element
+#         if not 'beschikbaar' in status.lower():
+#             continue
+#         urls.append(offer['href'])
+#     return urls, not bool(len(offers))
+
+def parse_bouwinvest(soup):
     urls = []
-    xpath = "//div[@class='projects-wrap bg-background-grey']/a[{}]"
-    last_page = False
-    wait_for_load = True
-    i = 1
-    while True:
-        try:
-            url, status = _get_elem_attributes(
-                driver_=web_driver, wait_for_load_=wait_for_load,
-                url_xpath_=xpath.format(i),
-                status_xpath_=f'{xpath.format(i)}/span/span[1]/span/span[4]',
-                timeout_=5
-            )
-            wait_for_load = False
-        except NoSuchElementException:
-            break
-        except TimeoutException:
+    for offer in soup.find_all(class_='projectproperty-tile box-shadow'):
+        city = offer.find(class_='paragraph fw-light').text
+        urls.append((offer['href'], city))
+    return urls, not bool(len(urls))
+
+
+def parse_schep(soup):
+    urls = []
+    for offer in soup.find_all(class_='object col-xs-12'):
+        status = offer.find('span').text
+        if status in ('Onder optie', 'Verhuurd ovb', 'Verhuurd'):
             last_page = True
             break
 
-        if status == 'Available' or 'beschikbaar' in status.lower():
-            urls.append(url)
-        i += 1
-    return urls, last_page
+        href = offer['href']
+        if href.startswith('https://wonenbijbouwinvest'):
+            continue
 
-
-def schep_parse(web_driver):
-    urls = []
-
-    # Handling endless page loop
-    # cur_page = int(web_driver.current_url.split('=')[-1])
-    # if cur_page > 1:
-    #     prev_page_url = _wait_get_elem(web_driver, "//a[@id='Main_ctl01_PrevLink']").get_attribute('href')
-    #     prev_page = int(prev_page_url.split('/')[-1])
-    #     if (cur_page - prev_page) > 1:
-    #         return urls, True
-
-    xpath = "//div[@class='woningList clearer row']/a[{}]"
-    last_page = False
-    wait_for_load = True
-    i = 1
-    while True:
-        try:
-            url, status = _get_elem_attributes(
-                driver_=web_driver, wait_for_load_=wait_for_load,
-                url_xpath_=xpath.format(i),
-                status_xpath_=f'{xpath.format(i)}/div[1]/span'
-            )
-            wait_for_load = False
-        except NoSuchElementException:
-            break
-
-        if status.lower() not in ('available', 'beschikbaar', 'nieuw'):
-            last_page = True
-            break
-
-        urls.append(url)
-        i += 1
+        city_elem = offer.find(class_='plaats')
+        city = city_elem.text if city_elem else 'Unknown'
+        urls.append((f'https://schepvastgoedmanagers.nl{href}', city))
+    else:
+        last_page = not len(urls)
     return urls, last_page

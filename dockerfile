@@ -1,12 +1,11 @@
-FROM python:3.10
+FROM python:3.10-alpine
 
 WORKDIR /usr/app
 
 COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
-RUN apt update && apt install -y --no-install-recommends cron firefox-esr
-RUN echo '*/2 5-21 * * * root /usr/local/bin/python /usr/app/main.py > /usr/app/cron.log 2>&1' > /etc/cron.d/scrapper
-RUN crontab /etc/cron.d/scrapper
+RUN apk update && apk add --no-cache firefox
+RUN echo '*/2 5-19 * * * python /usr/app/main.py' | crontab -
 
-CMD ["cron", "-f"]
+CMD ["crond","-f"]

@@ -1,76 +1,65 @@
 import os
-from urllib.parse import urlencode
 
-import requests
+from requests import post
 
-
-def compose_url(url, params):
-    return f'{url}{urlencode(params)}'
+from config import ERRORS_FILE
 
 
-def get_root_dir():
-    return os.path.dirname(__file__) 
-
-
-def get_abs_path(path):
-    if not os.path.isabs(path):
-        return f'{get_root_dir()}/{path}'
-    return path
-
-
-def add_dir(dir_name):
-    path_abs = get_abs_path(dir_name)
-    if os.path.exists(path_abs):
-        return
-    os.mkdir(path_abs)
-
-
-def dump_data(data, loc, rec_sep='\n', append=False):
-    loc_abs = get_abs_path(loc)
-    write_method = 'a' if append else 'w'
-    # data_ = [data] if isinstance(data, str) else data
-    with open(loc_abs, write_method) as file:
-        for record in data:
+def dump_data(loc, data, rec_sep='\n', append=True):
+    if not os.path.exists(os.path.dirname(loc)):
+        os.makedirs(os.path.dirname(loc))
+        
+    data_ = [data] if isinstance(data, str) else data
+    with open(loc, 'a' if append else 'w') as file:
+        for record in data_:
             file.write(f'{record}{rec_sep}')
 
 
 def load_data(loc):
     data = []
-    loc_abs = get_abs_path(loc)
-    if not os.path.exists(loc_abs):
-        return data
-    with open(loc_abs, 'r') as file:
-        for record in file:
-            data.append(record.rstrip())
+    if os.path.exists(loc):
+        with open(loc, 'r') as file:
+            for record in file:
+                data.append(record.rstrip())
     return data
 
 
-def list_dir_files(dir):
-    dir_abs = get_abs_path(dir)
-
-    items = []
-    if os.path.isfile(dir_abs):
-        return [dir]
-    for item in os.listdir(dir_abs):
-        items.extend(list_dir_files(f'{dir}/{item}'))
-    return items
+def log_error(msg):
+    dump_data(get_abs_path(ERRORS_FILE), msg)
 
 
-def format_message(header, body):
-    # if not body:
-    #     return ''
-    sep = '\n-'
-    body_formatted = sep.join(body)
-    return f'{header}:{sep}{body_formatted}'
+def get_abs_path(path):
+    if os.path.isabs(path):
+        return path
+    return f'{os.path.dirname(__file__) }/{path}'
 
 
-def send_tg_message(token, chat_id, msg):
+def delete_files(*paths):
+    for path_ in paths:
+        abs_path = get_abs_path(path_)
+        try:
+            os.remove(abs_path)
+        except FileNotFoundError:
+            pass
+
+
+def send_tg_message(msg, token, chat_id, md=True):
     api_url = f'https://api.telegram.org/bot{token}/sendMessage'
     payload = {
         'chat_id': chat_id,
         'text': msg,
-        'disable_web_page_preview': True
-        # 'parse_mode': 'MarkdownV2'
+        'disable_web_page_preview': True,
+        'parse_mode': 'HTML'
     }
-    requests.post(url=api_url, json=payload)
+    post(url=api_url, json=payload)
 
+
+def compose_offers_message(offers, errors):
+    offers = load_data(offers)
+    errors = load_data(errors)
+
+    offers_msg = '<b>New offers:</b>\n{}'.format('\n\n'.join(offers)) if offers else ''
+    errors_msg = '<b>Exceptions:</b>\n{}'.format('\n'.join(errors)) if errors else ''
+    sep = '\n' * 3 if offers and errors else ''
+
+    return f'{offers_msg}{sep}{errors_msg}'
