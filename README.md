@@ -8,5 +8,6 @@ TG_CHAT_ID=<value>
 TG_TEST_CHAT_ID=<value>
 ```
 where all the variables refer to the corresponding Telegram values.
+
 3. Change the cron schedule in `dockerfile` if necessary.
 4. Build an image and run the container using `docker`.
