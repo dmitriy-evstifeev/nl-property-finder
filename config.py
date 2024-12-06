@@ -79,3 +79,5 @@ IGNORED_CITIES = (
     "Maastricht",
     "Assen"
 )
+
+PRICE_RANGE = (1000, 1600)

@@ -1,0 +1,8 @@
+# Build the image
+docker build . -t 'house_scrapper_v3'
+
+# Run primary container
+docker run --name core -d house_scrapper_v3 sh -c "echo '* 7-19 * * * python /usr/app/main.py --corps mvgm,vesteda,rebo,schep,bouwinvest' | crontab - && crond -f"
+
+# Run the secondary one
+docker run --name minor -d house_scrapper_v3 sh -c "echo '*/5 7-19 * * * python /usr/app/main.py --corps stienstra,vanderlinden,vbt,wooove' | crontab - && crond -f"
