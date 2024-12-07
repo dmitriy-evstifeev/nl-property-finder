@@ -2,3 +2,5 @@
 .vscode
 py_venvs
 __pycache__
+data
+lab.py

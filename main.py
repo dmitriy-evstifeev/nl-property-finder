@@ -23,13 +23,14 @@ def init_webdriver(file_name):
 def process_urls(corps=None):
     utils.delete_files(config.ERRORS_FILE, config.NEW_OFFERS_FILE)
     HouseSeekerBase.set_ignore_list(config.IGNORED_CITIES)
+    HouseSeekerBase.set_price_range(*config.PRICE_RANGE)
 
     webdriver = None
 
     if corps:
         corps_to_process = {k: v for k, v in config.CORPS.items() if k in corps}
     else:
-        corps_to_process = config.CORPS.items()
+        corps_to_process = config.CORPS
 
     for corp, params in corps_to_process.items():
         webdriver_params = params.get('webdriver_params')
