@@ -5,3 +5,4 @@ __pycache__
 data
 lab.py
 docker
+errors.log

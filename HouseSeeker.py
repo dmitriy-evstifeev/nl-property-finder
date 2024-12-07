@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from time import sleep
 
 from bs4 import BeautifulSoup
 from selenium.common.exceptions import WebDriverException
@@ -33,10 +34,15 @@ class HouseSeekerBase(ABC):
         cls._price_range = (min_price, max_price)
 
     def _get_offers(self):
+        def handle_next_attempt(cnt, msg, sleep_sec=3):
+            sleep(sleep_sec)
+            print(f'{msg}: attempt #{cnt + 1}', end='. ', flush=True)
+
         offers = []
         page = 1
         current_url = self.url.format(page=page) if '{page}' in self.url else self.url
 
+        errors_cnt = 0
         while True:
             # print(current_url)
             last_page_signal = True  # in order not to repeat in each exc below
@@ -44,13 +50,29 @@ class HouseSeekerBase(ABC):
                 page_offers, last_page_signal = self._scrape_page(current_url)
                 filtered_offers = self._filter_offers(page_offers)
             except requests.RequestException:
-                utils.log_error(f'{self.name}: Request error')
+                msg_error = 'Request error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             except ScrapeException:
-                utils.log_error(f'{self.name}: Scrapping error')
+                msg_error = 'Scrapping error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             except WebDriverException:
-                utils.log_error(f'{self.name}: Selenium error')
+                msg_error = 'Selenium error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             else:
                 offers.extend(filtered_offers)
+                errors_cnt = 0
 
             if last_page_signal:
                 break
