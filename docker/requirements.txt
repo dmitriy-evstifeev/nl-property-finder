@@ -1,4 +1,0 @@
-requests
-selenium
-python-dotenv
-beautifulsoup4
