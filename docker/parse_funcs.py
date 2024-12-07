@@ -18,11 +18,13 @@ def parse_mvgm(soup):
         if href.startswith('https://wonenbijbouwinvest'):
             continue
 
-        # city_elem = offer.find(class_='card-body d-flex flex-column').find('span')
         city_elem = offer.find(class_='card-title h5 text-secondary mb-0').next_sibling.next_sibling
         city = ' '.join(city_elem.text.split()[1:]) if city_elem else 'Unknown'
+
+        price_elem = offer.find(class_='fw-bold')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
         
-        urls.append((f'https://ikwilhuren.nu{href}', city))
+        urls.append((f'https://ikwilhuren.nu{href}', city, price))
     else:
         last_page = not len(urls)
     return urls, last_page
@@ -36,10 +38,14 @@ def parse_vesteda(soup):
             break
 
         href = offer.next_element['href']
+
         city_elem = offer.find(class_='u-heading u-margin-bottom-none')
         city = city_elem.text.strip() if city_elem else 'Unknown'
 
-        urls.append((f'https://www.vesteda.com{href}', city))
+        price_elem = offer.find(class_='h5')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://www.vesteda.com{href}', city, price))
     return urls, True
 
 
@@ -56,24 +62,19 @@ def login_rebo(web_driver):
 def parse_rebo(soup):
     urls = []
     for offer in soup.find_all(class_='card card-result-list mb-4'):
-        # label_elem = offer.find(class_='label')
-        # label = label_elem.text.lower() if label_elem else ''
-        # if label == 'garage':
-        #     continue
-        # if label == 'complex':
-        #     break
         status = offer.find('span').text
         if status != 'Te huur':
             break
 
         href = offer.find('a').attrs.get('href')
         if href:
-            try:
-                # city = offer.find(class_='card-text').find('h4').text
-                city = offer.find(class_='card-text').text
-            except Exception:  # too generic...
-                city = 'Unknown'
-            urls.append((f'https://rebowonenhuur.nl{href}', city))
+            city_elem = offer.find(class_='card-text')
+            city = city_elem.text if city_elem else 'Unknown'
+
+            price_elem = offer.find(class_='value ml-1')
+            price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+            urls.append((f'https://rebowonenhuur.nl{href}', city, price))
     return urls, True
 
 
@@ -88,24 +89,20 @@ def parse_bouwinvest(soup):
             continue
 
         url = offer.find('a').attrs.get('href')
-        try:
-            city = offer.find(class_='paragraph fw-light').text
-        except:
-            city = 'Unknown'    
-        urls.append((url, city))
+
+        city_elem = offer.find(class_='paragraph fw-light')
+        city = city_elem.text if city_elem else 'Unknown'
+        
+        price_elem = offer.find(class_='price-tag')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((url, city, price))
 
     next_page_address = soup \
         .find(class_=re.compile('active active-exact pagination__arrow pagination__next icon-caret-right')) \
         .attrs.get('class')
     is_last_page = 'disabled' in next_page_address
     return urls, is_last_page
-
-# def parse_bouwinvest(soup):
-#     urls = []
-#     for offer in soup.find_all(class_='projectproperty-tile box-shadow'):
-#         city = offer.find(class_='paragraph fw-light').text
-#         urls.append((offer['href'], city))
-#     return urls, not bool(len(urls))
 
 
 def parse_schep(soup):
@@ -122,7 +119,11 @@ def parse_schep(soup):
 
         city_elem = offer.find(class_='plaats')
         city = city_elem.text if city_elem else 'Unknown'
-        urls.append((f'https://zoeken.schepvastgoedmanagers.nl{href}', city))
+
+        price_elem = offer.find(class_='prijs')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://zoeken.schepvastgoedmanagers.nl{href}', city, price))
     else:
         last_page = not len(urls)
     return urls, last_page
@@ -136,10 +137,14 @@ def parse_stienstra(soup):
             continue
 
         object = offer.find('h2', class_='property-title').a
-        # url = offer.find('a', class_='hover-effect h-100').attrs.get('href')
+
         href = object.attrs['href']
         city = object.text.split()[-1]
-        urls.append((f'https://www.stienstra.nl{href}', city))
+
+        price_elem = offer.find(class_='item-price')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://www.stienstra.nl{href}', city, price))
     last_page = not len(urls)
     return urls, last_page
     
@@ -154,7 +159,11 @@ def parse_vanderlinden(soup):
 
         href = offer.find('a', class_='a').attrs['href']
         city = offer.find('div', class_='objectgegevens').next_element.split('-')[-1].strip()
-        urls.append((f'https://www.vanderlinden.nl{href}', city))
+
+        price_elem = offer.find(class_='vraagprijs')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://www.vanderlinden.nl{href}', city, price))
     return urls, True
 
 
@@ -166,9 +175,12 @@ def parse_vbt(soup):
             continue
 
         city = offer.find(class_='items').div.text
-        urls.append((f'https://vbtverhuurmakelaars.nl{offer.attrs["href"]}', city))
 
-    # last_page_elem = soup.find(class_='shiftpage')
+        price_elem = offer.find(class_='price')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://vbtverhuurmakelaars.nl{offer.attrs["href"]}', city, price))
+
     navigation_elems = soup.find_all(class_='shiftpage')
     last_page = (len(navigation_elems) == 1) and (navigation_elems[0].text == 'Vorige')
     return urls, last_page
@@ -179,11 +191,11 @@ def parse_wooove(soup):
     for offer in soup.find_all(class_='col-xs-12 col-sm-6 col-md-4'):
         
         # filter out garages by price
-        price = offer.find(class_='prijs')
-        price_digits = re.findall(re.compile(r'\d'), price.div.text)
-        price = int(''.join(price_digits)) if price_digits else 0
-        if price < 800:
-            continue
+        # price = offer.find(class_='prijs')
+        # price_digits = re.findall(re.compile(r'\d'), price.div.text)
+        # price = int(''.join(price_digits)) if price_digits else 0
+        # if price < 800:
+        #     continue
 
         status = offer.find(class_=re.compile('statusbutton.*'))
         if status and (status.text.strip() != 'Nieuw!'):
@@ -191,7 +203,11 @@ def parse_wooove(soup):
 
         href = offer.attrs['href']
         city = offer.find(class_='plaats').text
-        urls.append((f'https://hurenbijwooove.nl{href}', city))
+
+        price_elem = offer.find(class_='prijs')
+        price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
+
+        urls.append((f'https://hurenbijwooove.nl{href}', city, price))
     
     last_page = soup.find(class_='nummers col-xs-12').span.next_sibling is None
     return urls, last_page

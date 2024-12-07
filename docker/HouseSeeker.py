@@ -16,7 +16,8 @@ class ScrapeException(AttributeError):
 
 
 class HouseSeekerBase(ABC):
-    _ignored_cities = None
+    _ignored_cities = []
+    _price_range = (float('-inf'), float('inf'))
 
     def __init__(self, name, url, parse_func):
         self.name = name
@@ -26,6 +27,10 @@ class HouseSeekerBase(ABC):
     @classmethod
     def set_ignore_list(cls, ignore_list):
         cls._ignored_cities = ignore_list
+
+    @classmethod
+    def set_price_range(cls, min_price, max_price):
+        cls._price_range = (min_price, max_price)
 
     def _get_offers(self):
         offers = []
@@ -62,9 +67,14 @@ class HouseSeekerBase(ABC):
         pass
 
     def _filter_offers(self, raw_offers_):
-        if not self._ignored_cities:
-            return raw_offers_
-        return (o[0] for o in raw_offers_ if o[1] not in self._ignored_cities)
+        filtered_offers = []
+        for o in raw_offers_:
+            url, city = o[0], o[1]
+            price = int(o[2] if o[2] else (self._price_range[0] + self._price_range[1]) / 2)
+            if (city not in self._ignored_cities) \
+                and (self._price_range[0] <= int(price) <= self._price_range[1]):
+                filtered_offers.append(url)
+        return filtered_offers
 
     def _extract_new_offers(self, cur_offers, prev_offers):
         return set(cur_offers) - set(prev_offers)

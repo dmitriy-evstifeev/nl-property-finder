@@ -70,14 +70,19 @@ IGNORED_CITIES = (
     "Enschede",
     "Apeldoorn",
     "Arnhem",
-    "Dordrecht",
+    # "Dordrecht",
     "Nijmegen",
-    "'s-Hertogenbosch",
-    "Breda",
+    # "'s-Hertogenbosch",
+    # "Breda",
     "Tilburg",
     "Eindhoven",
     "Maastricht",
-    "Assen"
+    "Assen",
+    "Alkmaar",
+    "Purmerend",
+    "Zutphen",
+    "Roermond",
+    "Helmond"
 )
 
 PRICE_RANGE = (1000, 1600)
