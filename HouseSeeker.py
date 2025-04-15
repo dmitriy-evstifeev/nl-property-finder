@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from time import sleep
 
 from bs4 import BeautifulSoup
 from selenium.common.exceptions import WebDriverException
@@ -7,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 import requests
 
-from config import DATA_DIR, NEW_OFFERS_FILE
+from config import DATA_DIR, NEW_OFFERS_FILE, USER_AGENT_VALUE
 import utils
 
 
@@ -16,7 +17,8 @@ class ScrapeException(AttributeError):
 
 
 class HouseSeekerBase(ABC):
-    _ignored_cities = None
+    _ignored_cities = []
+    _price_range = (float('-inf'), float('inf'))
 
     def __init__(self, name, url, parse_func):
         self.name = name
@@ -27,11 +29,20 @@ class HouseSeekerBase(ABC):
     def set_ignore_list(cls, ignore_list):
         cls._ignored_cities = ignore_list
 
+    @classmethod
+    def set_price_range(cls, min_price, max_price):
+        cls._price_range = (min_price, max_price)
+
     def _get_offers(self):
+        def handle_next_attempt(cnt, msg, sleep_sec=3):
+            sleep(sleep_sec)
+            print(f'{msg}: attempt #{cnt + 1}', end='. ', flush=True)
+
         offers = []
         page = 1
-        current_url = self.url.format(page=page) if '{PAGE}' in self.url else self.url
+        current_url = self.url.format(page=page) if '{page}' in self.url else self.url
 
+        errors_cnt = 0
         while True:
             # print(current_url)
             last_page_signal = True  # in order not to repeat in each exc below
@@ -39,20 +50,36 @@ class HouseSeekerBase(ABC):
                 page_offers, last_page_signal = self._scrape_page(current_url)
                 filtered_offers = self._filter_offers(page_offers)
             except requests.RequestException:
-                utils.log_error(f'{self.name}: Request error')
+                msg_error = 'Request error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             except ScrapeException:
-                utils.log_error(f'{self.name}: Scrapping error')
+                msg_error = 'Scrapping error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             except WebDriverException:
-                utils.log_error(f'{self.name}: Selenium error')
+                msg_error = 'Selenium error'
+                errors_cnt += 1
+                if errors_cnt < 3:
+                    handle_next_attempt(errors_cnt, msg_error)
+                    continue
+                utils.log_error(f'{self.name}: {msg_error}')
             else:
                 offers.extend(filtered_offers)
+                errors_cnt = 0
 
             if last_page_signal:
                 break
             
-            ### DEBUG AREA ###
+            ## DEBUG AREA ###
             # if page > 5: break
-            ##################
+            #################
             page += 1
             current_url = self.url.format(page=page)
         return offers
@@ -62,9 +89,14 @@ class HouseSeekerBase(ABC):
         pass
 
     def _filter_offers(self, raw_offers_):
-        if not self._ignored_cities:
-            return raw_offers_
-        return (o[0] for o in raw_offers_ if o[1] not in self._ignored_cities)
+        filtered_offers = []
+        for o in raw_offers_:
+            url, city = o[0], o[1]
+            price = int(o[2] if o[2] else (self._price_range[0] + self._price_range[1]) / 2)
+            if (city not in self._ignored_cities) \
+                and (self._price_range[0] <= int(price) <= self._price_range[1]):
+                filtered_offers.append(url)
+        return filtered_offers
 
     def _extract_new_offers(self, cur_offers, prev_offers):
         return set(cur_offers) - set(prev_offers)
@@ -88,7 +120,11 @@ class HouseSeekerBase(ABC):
 
 class HouseSeekerStatic(HouseSeekerBase):
     def _scrape_page(self, url_):
-        response = requests.get(url_)
+        headers_ = {
+            'User-Agent': USER_AGENT_VALUE
+        }
+
+        response = requests.get(url=url_, headers=headers_)
         if not response:
             raise requests.RequestException
         return self._parse_html(response.content)
@@ -107,9 +143,17 @@ class HouseSeekerDynamic(HouseSeekerStatic):
         super().__init__(name, url, parse_func)
         self.web_driver = web_driver
         self.web_driver_params = web_driver_params
+        if self.web_driver_params.get('pre-hook-func'):
+            self.web_driver_params['pre-hook-func'](self.web_driver)
 
     def _scrape_page(self, url_):
         self.web_driver.get(url_)
-        WebDriverWait(self.web_driver, self.web_driver_params.get('timeout', 10)) \
-            .until(EC.presence_of_all_elements_located((By.XPATH, self.web_driver_params['xpath'])))
+
+        if isinstance(self.web_driver_params['xpath'], str):
+            xpaths = [self.web_driver_params['xpath']]
+        else:
+            xpaths = self.web_driver_params['xpath']
+        for xpath in xpaths:
+            WebDriverWait(self.web_driver, self.web_driver_params.get('timeout', 10)) \
+                .until(EC.presence_of_all_elements_located((By.XPATH, xpath)))
         return super()._parse_html(self.web_driver.page_source)

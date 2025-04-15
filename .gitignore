@@ -1,5 +1,8 @@
+.DS_Store
+.vscode
+py_venvs
 __pycache__
-.env
-data/
-geckodriver*
-
+data
+lab.py
+docker
+errors.log

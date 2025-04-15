@@ -1,0 +1,11 @@
+# Build the image
+# Run primary container
+# Run the secondary one
+
+docker build . -t house_scrapper_v3 \
+    && docker run --name core -d house_scrapper_v3 sh -c "echo '* 6-19 * * * python /usr/app/main.py --corps mvgm,vesteda,rebo,schep,bouwinvest' | crontab - && crond -f" \
+    && docker run --name minor -d house_scrapper_v3 sh -c "echo '*/5 6-19 * * * python /usr/app/main.py --corps stienstra,vanderlinden,vbt,wooove' | crontab - && crond -f"
+
+
+# Deleting containers & image
+docker stop core minor && docker container prune -f && docker rmi house_scrapper_v3 

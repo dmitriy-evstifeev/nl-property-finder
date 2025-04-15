@@ -1,5 +1,6 @@
 from datetime import datetime
 from os import devnull, environ, path
+from sys import argv
 
 from dotenv import load_dotenv
 from selenium import webdriver
@@ -19,13 +20,19 @@ def init_webdriver(file_name):
     return webdriver.Firefox(service=service, options=options)
 
 
-def process_urls():
+def process_urls(corps=None):
     utils.delete_files(config.ERRORS_FILE, config.NEW_OFFERS_FILE)
     HouseSeekerBase.set_ignore_list(config.IGNORED_CITIES)
+    HouseSeekerBase.set_price_range(*config.PRICE_RANGE)
 
     webdriver = None
 
-    for corp, params in config.CORPS.items():
+    if corps:
+        corps_to_process = {k: v for k, v in config.CORPS.items() if k in corps}
+    else:
+        corps_to_process = config.CORPS
+
+    for corp, params in corps_to_process.items():
         webdriver_params = params.get('webdriver_params')
         if webdriver_params:
             webdriver = webdriver or init_webdriver(utils.get_abs_path(config.WEBDRIVER))
@@ -35,8 +42,8 @@ def process_urls():
 
         corp.process()
 
-        if webdriver:
-            webdriver.quit()
+    if webdriver:
+        webdriver.quit()
 
 
 def main():
@@ -46,11 +53,16 @@ def main():
 
     load_dotenv()
     bot_token = environ['TG_BOT_TOKEN']
-    chat_id = environ['TG_CHAT_ID']
-    # chat_id = environ['TG_TEST_CHAT_ID']
+    # chat_id = environ['TG_CHAT_ID']
+    chat_id = environ['TG_TEST_CHAT_ID']
+
+    args = argv[1:]
+    corps_ = None
+    if args and args[0].endswith('corps'):
+        corps_ = args[1].split(',')
 
     try:
-        process_urls()
+        process_urls(corps_)
     except Exception as e:
         ex_msg = f'<b>Unforeseen exception:</b>\n{e}'
         # print(ex_msg)
