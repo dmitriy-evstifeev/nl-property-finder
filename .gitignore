@@ -6,3 +6,4 @@ data
 lab.py
 docker
 errors.log
+.env
