@@ -34,7 +34,7 @@ def process_urls(corps=None):
 
     for corp, params in corps_to_process.items():
         webdriver_params = params.get('webdriver_params')
-        if webdriver_params:
+        if webdriver_params and not params.get('enforce_static', False):
             webdriver = webdriver or init_webdriver(utils.get_abs_path(config.WEBDRIVER))
             corp = HouseSeekerDynamic(corp, params['url'], params['parse_func'], webdriver, webdriver_params)
         else:

@@ -1,6 +1,7 @@
 import re
 from os import environ
 
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 
 
@@ -49,14 +50,29 @@ def parse_vesteda(soup):
     return urls, True
 
 
+# Very rough way to log in via several attempts. First attempt results as an expired session
 def login_rebo(web_driver):
     web_driver.get('https://rebowonenhuur.nl/login/')
-    login_field = web_driver.find_element(By.XPATH, '//input[@name="txtEmail"]')
-    login_field.send_keys(environ['REBO_LOGIN'])
-    password_field = web_driver.find_element(By.XPATH, '//input[@name="txtWachtwoord"]')
-    password_field.send_keys(environ['REBO_PWD'])
-    login_button = web_driver.find_element(By.XPATH, '//button[@class="btn btn-secondary btn-block"]')
-    login_button.click()
+    attempts = 2
+    curr_attempt = 0
+    while curr_attempt < attempts:
+        login_field_xpath = '//input[@name="txtEmail"]'
+        login_field = web_driver.find_element(By.XPATH, login_field_xpath)
+        login_field.send_keys(environ['REBO_LOGIN'])
+        password_field = web_driver.find_element(By.XPATH, '//input[@name="txtWachtwoord"]')
+        password_field.send_keys(environ['REBO_PWD'])
+        login_button = web_driver.find_element(By.XPATH, '//button[@class="btn btn-secondary btn-block"]')
+        login_button.click()
+
+        try:
+            login_field = web_driver.find_element(By.XPATH, login_field_xpath)
+        except NoSuchElementException:
+            return
+        curr_attempt += 1
+    raise Exception('REBO login screen Exception')
+
+    # ack_button = web_driver.find_element(By.XPATH, '//button[@class="btn btn-primary btn-dismiss px-5"]')
+    # ack_button.click()
 
 
 def parse_rebo(soup):
@@ -151,26 +167,31 @@ def parse_stienstra(soup):
 
 def parse_vanderlinden(soup):
     urls = []
-    for offer in soup.find_all(class_='zoekresultaat zoekresultaat3kol'):
-        status = offer.span.text
-        if status not in ('Direct beschikbaar', 'Binnenkort beschikbaar') \
-            and ('woning' not in status.lower()):
+    for offer in soup.find_all(class_='col-12 col-sm-6 col-lg-4 mb-4'):
+        status = offer.find(class_='fotolabel').text
+        if status not in ('Direct beschikbaar', 'Binnenkort beschikbaar'): # and ('woning' not in status.lower()):
             continue
 
-        href = offer.find('a', class_='a').attrs['href']
-        city = offer.find('div', class_='objectgegevens').next_element.split('-')[-1].strip()
+        href = offer.find('a', class_='blocklink blocklinkarrow').attrs['href']
+        city = offer.find('i', class_='fa-solid fa-location-dot').next_element.split('-')[-1].strip()
 
-        price_elem = offer.find(class_='vraagprijs')
+        price_elem = offer.find(class_='mt-2')
         price = re.search(r'[\d.]+', price_elem.text).group().replace('.', '') if price_elem else None
 
         urls.append((f'https://www.vanderlinden.nl{href}', city, price))
     return urls, True
 
 
+def accept_cookies_vbt(web_driver):
+    web_driver.get('https://vbtverhuurmakelaars.nl/woningen')
+    reject_button = web_driver.find_element(By.XPATH, '//button[@class="button decline show-nadvanced svelte-19xnkg3"]')
+    reject_button.click()
+
+
 def parse_vbt(soup):
     urls = []
-    for offer in soup.find_all(class_='property svelte-6vswny'):
-        status = offer.find(class_=re.compile('status.*svelte-6vswny')).text.strip()
+    for offer in soup.find_all(class_='property svelte-16bhc06'):
+        status = offer.find(class_=re.compile('status.*svelte-16bhc06')).text.strip()
         if status != 'Beschikbaar':
             continue
 
